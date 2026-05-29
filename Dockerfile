@@ -1,4 +1,4 @@
-FROM docker.westsnow.cn/lukemathwalker/cargo-chef:latest-rust-trixie AS frontend-builder
+FROM lukemathwalker/cargo-chef:latest-rust-1.95-trixie AS frontend-builder
 WORKDIR /build
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -15,7 +15,7 @@ COPY .cargo/ .cargo/
 RUN cargo binstall trunk --no-confirm && \
     cd clewdr-frontend && trunk build --release
 
-FROM docker.westsnow.cn/lukemathwalker/cargo-chef:latest-rust-trixie AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.95-trixie AS chef
 WORKDIR /build
 
 FROM chef AS planner
@@ -30,7 +30,7 @@ ARG HTTPS_PROXY
 ARG http_proxy
 ARG https_proxy
 # Install build dependencies + musl toolchain
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     clang \
@@ -73,7 +73,7 @@ RUN RUST_TARGET=$(cat /tmp/rust-target) && \
 # ============================================================
 # Download mihomo binary for the target architecture
 # ============================================================
-FROM docker.westsnow.cn/library/debian:trixie-slim AS mihomo-fetcher
+FROM debian:trixie-slim AS mihomo-fetcher
 ARG TARGETARCH
 ARG MIHOMO_VERSION=v1.19.10
 ARG HTTP_PROXY
@@ -95,7 +95,7 @@ RUN case "$TARGETARCH" in \
 # ============================================================
 # Download s6-overlay for the target architecture
 # ============================================================
-FROM docker.westsnow.cn/library/debian:trixie-slim AS s6-fetcher
+FROM debian:trixie-slim AS s6-fetcher
 ARG TARGETARCH
 ARG S6_VERSION=3.2.0.2
 ARG HTTP_PROXY
@@ -118,7 +118,7 @@ RUN case "$TARGETARCH" in \
 # ============================================================
 # Final image
 # ============================================================
-FROM docker.westsnow.cn/library/debian:trixie-slim
+FROM debian:trixie-slim
 
 # Install ca-certificates for HTTPS
 ARG HTTP_PROXY

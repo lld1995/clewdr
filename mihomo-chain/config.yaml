@@ -52,8 +52,8 @@ proxies:
   # --- 第一跳：A1 (公司 HTTP 代理) ---
   - name: "A1"
     type: http
-    server: 192.168.170.110
-    port: 1282
+    server: 172.17.0.1
+    port: 7890
     skip-cert-verify: true
 
   # --- 第二跳：A2 (住宅 SOCKS5 代理) ---

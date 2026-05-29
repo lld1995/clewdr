@@ -4,7 +4,15 @@
 # ============================================================
 services:
   clewdr:
-    image: ghcr.io/evisscher/clewdr:master   # 替换为你的镜像地址
+    build:
+      context: .
+      args:
+        HTTP_PROXY: http://172.17.0.1:7890
+        HTTPS_PROXY: http://172.17.0.1:7890
+        http_proxy: http://172.17.0.1:7890
+        https_proxy: http://172.17.0.1:7890
+        TARGETARCH: amd64
+    image: clewdr:latest
     container_name: clewdr
     restart: unless-stopped
 
