@@ -1,0 +1,76 @@
+# ============================================================
+# mihomo 单代理配置（仅 A1）
+# 流量路径: 客户端 → A1 → 目标
+# ============================================================
+port: 17890
+socks-port: 17891
+mixed-port: 17892
+redir-port: 17893
+tproxy-port: 17894
+allow-lan: true
+bind-address: "0.0.0.0"
+mode: rule
+log-level: info
+ipv6: false
+
+# RESTful API 管理接口
+external-controller: 0.0.0.0:19090
+external-ui: ""
+secret: ""
+
+# DNS 配置
+dns:
+  enable: true
+  listen: 0.0.0.0:10053
+  ipv6: false
+  default-nameserver:
+    - 223.5.5.5
+    - 114.114.114.114
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - https://doh.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  fallback:
+    - https://dns.quad9.net/dns-query
+    - https://dns.cloudflare.com/dns-query
+  fallback-filter:
+    geoip: true
+    ipcidr:
+      - 240.0.0.0/4
+
+# ============================================================
+# 代理节点定义
+# ============================================================
+proxies:
+  # --- A1 (公司 HTTP 代理) ---
+  - name: "A1"
+    type: http
+    server: 192.168.170.110
+    port: 1282
+    skip-cert-verify: true
+
+proxy-groups:
+  - name: "Proxy"
+    type: select
+    proxies:
+      - A1
+      - DIRECT
+
+  - name: "Global"
+    type: select
+    proxies:
+      - Proxy
+      - DIRECT
+      - REJECT
+
+# ============================================================
+# 规则
+# ============================================================
+rules:
+  # 局域网/内网流量直连
+  - GEOIP,LAN,DIRECT,no-resolve
+  - GEOIP,CN,DIRECT
+
+  # 默认走 A1
+  - MATCH,Proxy
