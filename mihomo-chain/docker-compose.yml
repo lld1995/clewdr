@@ -1,0 +1,40 @@
+# ============================================================
+# docker-compose.yml
+# mihomo v1.19.25 链式代理容器
+# ============================================================
+version: "3.9"
+
+services:
+  mihomo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mihomo-chain:v1.19.25
+    container_name: mihomo-chain
+    restart: unless-stopped
+
+    # 网络模式: bridge（端口映射方式暴露服务）
+    # 如需 tproxy/redir 透明代理，需改回 host 或 macvlan
+
+    volumes:
+      # 将 config.yaml 映射到容器内
+      - ./config.yaml:/etc/mihomo/config.yaml:ro
+
+    ports:
+      - "17890:17890/tcp"   # HTTP
+      - "17891:17891/tcp"   # SOCKS5
+      - "17892:17892/tcp"   # Mixed
+      - "17893:17893/tcp"   # Redir TCP
+      - "17894:17894/tcp"   # TProxy TCP
+      - "17894:17894/udp"   # TProxy UDP
+      - "10053:10053/tcp"   # DNS TCP
+      - "10053:10053/udp"   # DNS UDP
+      - "19090:19090/tcp"   # API
+
+    # 赋予 NET_ADMIN 权限（tproxy/redir 需要）
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+    environment:
+      - TZ=Asia/Shanghai

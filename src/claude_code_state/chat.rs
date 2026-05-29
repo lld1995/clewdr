@@ -115,6 +115,11 @@ impl ClaudeCodeState {
         if let Some(stripped) = p.model.strip_suffix("-1M") {
             p.model = stripped.to_string();
         }
+        // claude-opus-4+ does not support `temperature` or `top_p`
+        if Self::model_deprecates_temperature(&p.model) {
+            p.temperature = None;
+            p.top_p = None;
+        }
         let model_family = Self::classify_model(&p.model);
         let response = self.execute_claude_request(&access_token, &p).await?;
         self.handle_success_response(response, model_family).await
@@ -492,6 +497,14 @@ impl ClaudeCodeState {
             }
         }
         parts.join(",")
+    }
+
+    /// Returns true for models that have deprecated the `temperature` / `top_p` parameters
+    /// (claude-opus-4 and any later "claude-opus-4.*" variants).
+    fn model_deprecates_temperature(model: &str) -> bool {
+        let m = model.to_ascii_lowercase();
+        // Match claude-opus-4, claude-opus-4-*, etc.
+        m == "claude-opus-4" || m.starts_with("claude-opus-4-")
     }
 
     fn classify_model(model: &str) -> ModelFamily {

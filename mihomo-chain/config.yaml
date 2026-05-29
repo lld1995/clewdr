@@ -1,0 +1,97 @@
+# ============================================================
+# mihomo v1.19.25 链式代理配置
+# 流量路径: 客户端 → A1(dialer) → A2 → 目标
+# ============================================================
+port: 17890
+socks-port: 17891
+mixed-port: 17892
+redir-port: 17893
+tproxy-port: 17894
+allow-lan: true
+bind-address: "0.0.0.0"
+mode: rule
+log-level: info
+ipv6: false
+
+# 链式代理方案：per-proxy dialer-proxy
+# 仅 A2 的 TCP 连接通过 A1 建立（A2 上设置 dialer-proxy: A1）
+# 流量路径: 客户端 → A1(HTTP隧道) → A2(SOCKS5) → 目标
+# 不设全局 dialer-proxy，避免影响 SOCKS5 上游的正常连接逻辑
+
+# RESTful API 管理接口
+external-controller: 0.0.0.0:19090
+external-ui: ""
+secret: ""
+
+# DNS 配置
+dns:
+  enable: true
+  listen: 0.0.0.0:10053
+  ipv6: false
+  default-nameserver:
+    - 223.5.5.5
+    - 114.114.114.114
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - https://doh.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  fallback:
+    - https://dns.quad9.net/dns-query
+    - https://dns.cloudflare.com/dns-query
+  fallback-filter:
+    geoip: true
+    ipcidr:
+      - 240.0.0.0/4
+
+# ============================================================
+# 代理节点定义
+# 请将下面的 server/port/password 替换为你的实际值
+# ============================================================
+proxies:
+  # --- 第一跳：A1 (公司 HTTP 代理) ---
+  - name: "A1"
+    type: http
+    server: 192.168.170.110
+    port: 1282
+    skip-cert-verify: true
+
+  # --- 第二跳：A2 (住宅 SOCKS5 代理) ---
+  # 通过 dialer-proxy A1 发起 TCP 连接，实现 A1→A2 链
+  # 路径: 客户端 → A1(HTTP) → A2(SOCKS5) → 目标
+  - name: "A2"
+    type: socks5
+    server: 149.119.151.132
+    port: 443
+    username: "tLhZEgmnXDwU"
+    password: "fhRJyqCuzz"
+    udp: true
+    dialer-proxy: A1
+
+proxy-groups:
+  # 链式选择器：A1→A2 链（A2 通过 dialer-proxy A1 建立连接）
+  - name: "Proxy"
+    type: select
+    proxies:
+      - A2
+      - A1
+      - DIRECT
+
+  # ---- 国际流量 ----
+  - name: "Global"
+    type: select
+    proxies:
+      - Proxy
+      - DIRECT
+      - REJECT
+
+# ============================================================
+# 规则
+# ============================================================
+rules:
+  # 局域网/内网流量直连
+  - GEOIP,LAN,DIRECT,no-resolve
+  - GEOIP,CN,DIRECT
+
+  # 默认走链式代理
+  - MATCH,Proxy

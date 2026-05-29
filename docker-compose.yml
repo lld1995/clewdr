@@ -1,0 +1,33 @@
+# ============================================================
+# clewdr + mihomo 一体化部署
+# clewdr 对外提供 API，mihomo 在容器内部作链式代理出站
+# ============================================================
+services:
+  clewdr:
+    image: ghcr.io/evisscher/clewdr:master   # 替换为你的镜像地址
+    container_name: clewdr
+    restart: unless-stopped
+
+    ports:
+      - "8484:8484"     # clewdr API
+
+    volumes:
+      # clewdr 配置和日志持久化
+      - ./data/clewdr:/etc/clewdr
+
+      # mihomo 链式代理配置
+      # 直接挂载 mihomo-chain/config.yaml
+      - ./mihomo-chain/config.yaml:/etc/mihomo/config.yaml:ro
+
+    environment:
+      # clewdr 基础配置（也可写入 /etc/clewdr/clewdr.toml）
+      - CLEWDR_IP=0.0.0.0
+      - CLEWDR_PORT=8484
+      - CLEWDR_CHECK_UPDATE=FALSE
+      - CLEWDR_AUTO_UPDATE=FALSE
+
+      # mihomo 内部 HTTP 代理，容器内固定地址，无需修改
+      - CLEWDR_PROXY=http://127.0.0.1:17890
+
+      # 如需完全不走代理，将上面一行改为：
+      # - CLEWDR_PROXY=
