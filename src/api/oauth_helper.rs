@@ -210,6 +210,19 @@ pub fn parse_code(input: &str) -> Option<(String, Option<String>)> {
             return Some((code, state));
         }
     }
+    // The redirect page shows the code and state joined by '#', as one
+    // copyable string.
+    if let Some((code, state)) = trimmed.split_once('#')
+        && !code.trim().is_empty()
+        && !code.trim().contains('/')
+    {
+        let code = code.trim();
+        let state = state.trim();
+        return Some((
+            code.to_owned(),
+            (!state.is_empty()).then(|| state.to_owned()),
+        ));
+    }
     // A bare code, possibly with the state following it on the same paste.
     let mut parts = trimmed.split_whitespace();
     let code = parts.next()?.to_owned();
@@ -249,6 +262,20 @@ mod tests {
         assert_eq!(
             parse_code("xyz789 st-ate"),
             Some(("xyz789".to_owned(), Some("st-ate".to_owned())))
+        );
+    }
+
+    /// The redirect page shows `code#state` as one string to copy; that is
+    /// what an operator pastes back.
+    #[test]
+    fn parses_the_code_hash_state_form_the_page_displays() {
+        assert_eq!(
+            parse_code("QXK9LKB7bGm#-GTvIElVWCJg"),
+            Some(("QXK9LKB7bGm".to_owned(), Some("-GTvIElVWCJg".to_owned())))
+        );
+        assert_eq!(
+            parse_code("QXK9LKB7bGm#"),
+            Some(("QXK9LKB7bGm".to_owned(), None))
         );
     }
 

@@ -95,6 +95,19 @@ const $ = id => document.getElementById(id);
 const lsKey = 'clewdr_admin_key';
 $('key').value = localStorage.getItem(lsKey) || '';
 
+// The admin middleware answers auth failures with {"error": {message,...}}
+// while the handlers answer with {"error": "text"}; render both, and never
+// let an object reach Error() or the user sees "[object Object]".
+function errMsg(body, status) {
+  const e = body && body.error;
+  if (typeof e === 'string' && e) return e;
+  if (e && typeof e === 'object') {
+    if (typeof e.message === 'string' && e.message) return e.message;
+  }
+  if (status === 401) return '管理密码不正确（401）。请填写 clewdr.toml 里的 admin_password。';
+  try { return JSON.stringify(body) || ('HTTP ' + status); } catch { return 'HTTP ' + status; }
+}
+
 async function call(path, opts) {
   const key = $('key').value.trim();
   localStorage.setItem(lsKey, key);
@@ -103,7 +116,7 @@ async function call(path, opts) {
   }, opts));
   let body = {};
   try { body = await res.json(); } catch {}
-  if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
+  if (!res.ok) throw new Error(errMsg(body, res.status));
   return body;
 }
 
@@ -148,10 +161,11 @@ $('test').onclick = async () => {
   try {
     const key = $('key').value.trim();
     const res = await fetch('/code/v1/models', { headers: { 'Authorization': 'Bearer ' + key } });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    await res.json();
+    let body = {};
+    try { body = await res.json(); } catch {}
+    if (!res.ok) throw new Error(errMsg(body, res.status));
     show($('okmsg'), '/code/v1 接口可达且认证通过。发送一条真实消息即可确认端到端可用。');
-  } catch (e) { show($('errmsg'), '测试失败：' + e.message); }
+  } catch (e) { show($('errmsg'), '测试失败：' + e.message + '（注意此测试需要 API password，与 admin_password 可能不同）'); }
 };
 </script>
 </body>
