@@ -209,6 +209,7 @@ impl IntoResponse for ClewdrError {
                 message: msg,
                 r#type: <&str>::from(self).into(),
                 code: Some(status.as_u16()),
+                error_code: None,
             },
         };
         (status, Json(err)).into_response()
@@ -228,6 +229,10 @@ pub struct ClaudeErrorBody {
     pub r#type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<u16>,
+    /// Machine-readable cause carried in `details.error_code`, e.g.
+    /// `missing_client_attestation` on the OAuth authorize endpoint.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
 }
 
 /// Raw Inner HTTP error response
@@ -235,26 +240,36 @@ pub struct ClaudeErrorBody {
 struct RawBody {
     pub message: String,
     pub r#type: String,
+    #[serde(default)]
+    details: Option<Value>,
 }
 
 impl<'de> Deserialize<'de> for ClaudeErrorBody {
-    /// when message is a json string, try parse it as a object
+    /// when message is a json string, try parse it as a json object
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         let raw = RawBody::deserialize(deserializer)?;
+        let error_code = raw
+            .details
+            .as_ref()
+            .and_then(|d| d.get("error_code"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
         if let Ok(message) = serde_json::from_str::<Value>(&raw.message) {
             return Ok(ClaudeErrorBody {
                 message,
                 r#type: raw.r#type,
                 code: None,
+                error_code,
             });
         }
         Ok(ClaudeErrorBody {
             message: json!(raw.message),
             r#type: raw.r#type,
             code: None,
+            error_code,
         })
     }
 }
@@ -303,6 +318,7 @@ impl CheckClaudeErr for Response {
                 message: json!("Blocked, check your IP address"),
                 r#type: "error".to_string(),
                 code: Some(status.as_u16()),
+                error_code: None,
             };
             return Err(ClewdrError::ClaudeHttpError {
                 code: status,
@@ -316,6 +332,7 @@ impl CheckClaudeErr for Response {
                     message: json!(err.to_string()),
                     r#type: "error_get_error_body".to_string(),
                     code: Some(status.as_u16()),
+                    error_code: None,
                 };
                 return Err(ClewdrError::ClaudeHttpError {
                     code: status,
@@ -328,6 +345,7 @@ impl CheckClaudeErr for Response {
                 message: format!("Unknown error: {text}").into(),
                 r#type: "error_parse_error_body".to_string(),
                 code: Some(status.as_u16()),
+                error_code: None,
             };
             return Err(ClewdrError::ClaudeHttpError {
                 code: status,
@@ -379,5 +397,39 @@ impl CheckClaudeErr for Response {
             code: status,
             inner: inner_error,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The authorize endpoint reports its cause only through
+    /// `details.error_code`; dropping it is how the hCaptcha attestation
+    /// rollout stayed invisible in logs.
+    #[test]
+    fn parses_the_details_error_code() {
+        let err: ClaudeError = serde_json::from_str(
+            r#"{"type":"error","error":{"type":"invalid_request_error",
+                "message":"This request couldn't be completed.",
+                "details":{"error_code":"missing_client_attestation"}}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            err.error.error_code.as_deref(),
+            Some("missing_client_attestation")
+        );
+        // The code must survive the Display round-trip into logs.
+        assert!(err.error.to_string().contains("missing_client_attestation"));
+    }
+
+    #[test]
+    fn error_code_is_none_when_no_details_travel() {
+        let err: ClaudeError =
+            serde_json::from_str(r#"{"error":{"message":"nope","type":"invalid_request_error"}}"#)
+                .unwrap();
+
+        assert_eq!(err.error.error_code, None);
     }
 }

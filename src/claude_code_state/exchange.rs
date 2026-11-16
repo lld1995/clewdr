@@ -30,6 +30,10 @@ pub struct ExchangeResult {
     org_uuid: String,
 }
 
+/// `details.error_code` the authorize endpoint returns when the request lacks
+/// the browser-minted hCaptcha attestation ("glowing coral" gate).
+const ATTESATION_REQUIRED_CODE: &str = "missing_client_attestation";
+
 /// The outcome of a token request that the caller has to tell apart.
 ///
 /// A rejected grant is not treated as a failure by every caller: a refresh
@@ -78,19 +82,35 @@ impl ClaudeCodeState {
         if let Some(cookie) = self.cookie.as_ref() {
             authorize_req = authorize_req.header(COOKIE, cookie.cookie.to_string());
         }
-        let redirect_json = authorize_req
+        let response = authorize_req
             .send()
             .await
             .context(WreqSnafu {
                 msg: "Failed to send authorization request",
             })?
             .check_claude()
-            .await?
-            .json::<Value>()
-            .await
-            .context(WreqSnafu {
-                msg: "Failed to parse authorization response",
-            })?;
+            .await;
+        let response = match response {
+            Ok(response) => response,
+            Err(ClewdrError::ClaudeHttpError { code, ref inner })
+                if inner.error_code.as_deref() == Some(ATTESATION_REQUIRED_CODE) =>
+            {
+                tracing::warn!(
+                    "Anthropic now requires a browser-minted hCaptcha client attestation on the \
+                     OAuth authorize step; a sessionKey alone can no longer mint OAuth tokens \
+                     headlessly. Authorize once in a real browser and keep the stored \
+                     access/refresh token, which renews without attestation."
+                );
+                return Err(ClewdrError::ClaudeHttpError {
+                    code,
+                    inner: inner.clone(),
+                });
+            }
+            Err(e) => return Err(e),
+        };
+        let redirect_json = response.json::<Value>().await.context(WreqSnafu {
+            msg: "Failed to parse authorization response",
+        })?;
 
         let redirect_uri =
             redirect_json["redirect_uri"]

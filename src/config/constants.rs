@@ -19,9 +19,9 @@ pub const CC_CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 pub const CC_TOKEN_URL: &str = "https://api.anthropic.com/v1/oauth/token";
 pub const CC_REFRESH_URL: &str = "https://platform.claude.com/v1/oauth/token";
 pub const CC_REDIRECT_URI: &str = "https://platform.claude.com/oauth/code/callback";
-pub const CLAUDE_CODE_VERSION: &str = "2.1.316";
-pub const CLAUDE_CODE_USER_AGENT: &str = "claude-code/2.1.316";
-pub const CLAUDE_CODE_API_USER_AGENT: &str = "claude-cli/2.1.316 (external, cli)";
+pub const CLAUDE_CODE_VERSION: &str = "2.1.325";
+pub const CLAUDE_CODE_USER_AGENT: &str = "claude-code/2.1.325";
+pub const CLAUDE_CODE_API_USER_AGENT: &str = "claude-cli/2.1.325 (external, cli)";
 pub const CLAUDE_CODE_BILLING_SALT: &str = "59cf53e54c78";
 
 pub static ENDPOINT_URL: LazyLock<Url> = LazyLock::new(|| {

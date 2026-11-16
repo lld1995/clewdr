@@ -419,12 +419,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn claude_code_billing_header_matches_21316_rule() {
+    fn claude_code_billing_header_matches_cc_version_rule() {
         let messages = vec![Message::new_text(Role::User, "hey")];
 
         assert_eq!(
             claude_code_billing_header(&messages),
-            "x-anthropic-billing-header: cc_version=2.1.316.2e4; cc_entrypoint=cli; cch=00000;"
+            "x-anthropic-billing-header: cc_version=2.1.325.ff3; cc_entrypoint=cli; cch=00000;"
         );
     }
 
@@ -434,7 +434,7 @@ mod tests {
 
         assert_eq!(
             claude_code_billing_header(&messages),
-            "x-anthropic-billing-header: cc_version=2.1.316.c50; cc_entrypoint=cli; cch=00000;"
+            "x-anthropic-billing-header: cc_version=2.1.325.a71; cc_entrypoint=cli; cch=00000;"
         );
     }
 
@@ -459,7 +459,7 @@ mod tests {
 
         assert_eq!(
             claude_code_billing_header(&messages),
-            "x-anthropic-billing-header: cc_version=2.1.316.d32; cc_entrypoint=cli; cch=00000;"
+            "x-anthropic-billing-header: cc_version=2.1.325.df0; cc_entrypoint=cli; cch=00000;"
         );
     }
 
