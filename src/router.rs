@@ -11,8 +11,8 @@ use tower_http::{compression::CompressionLayer, cors::CorsLayer};
 use crate::{
     api::{
         api_auth, api_claude_code, api_claude_code_count_tokens, api_claude_web, api_delete_cookie,
-        api_get_config, api_get_cookies, api_get_models, api_post_config, api_post_cookie,
-        api_version,
+        api_get_config, api_get_cookies, api_get_models, api_oauth_authorize_url,
+        api_oauth_complete, api_oauth_helper_page, api_post_config, api_post_cookie, api_version,
     },
     middleware::{
         RequireAdminAuth, RequireBearerAuth, RequireFlexibleAuth,
@@ -105,6 +105,10 @@ impl RouterBuilder {
             .route("/cookies", get(api_get_cookies))
             .route("/cookie", delete(api_delete_cookie).post(api_post_cookie))
             .with_state(self.cookie_pool.clone());
+        let oauth_router = Router::new()
+            .route("/oauth/authorize_url", get(api_oauth_authorize_url))
+            .route("/oauth/complete", post(api_oauth_complete))
+            .with_state(self.cookie_pool.clone());
         let admin_router = Router::new()
             .route("/auth", get(api_auth))
             .route("/config", get(api_get_config).post(api_post_config))
@@ -114,9 +118,11 @@ impl RouterBuilder {
                 "/api",
                 cookie_router
                     .merge(admin_router)
+                    .merge(oauth_router)
                     .layer(from_extractor::<RequireAdminAuth>()),
             )
-            .route("/api/version", get(api_version));
+            .route("/api/version", get(api_version))
+            .route("/oauth-helper", get(api_oauth_helper_page));
         self.inner = self.inner.merge(router);
         self
     }

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clewdr · OAuth 授权助手</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; justify-content: center;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #1a1a1e; color: #ececf1;
+  }
+  .card {
+    width: min(680px, 92vw); margin: 40px 0; padding: 32px;
+    background: #232329; border: 1px solid #32323a; border-radius: 16px;
+  }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .sub { color: #a3a3ad; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }
+  .step { margin: 22px 0; padding: 18px; background: #1c1c21; border: 1px solid #32323a; border-radius: 12px; }
+  .step h2 { font-size: 15px; margin: 0 0 10px; color: #f5c542; }
+  label { display: block; font-size: 13px; color: #a3a3ad; margin-bottom: 6px; }
+  input[type=password], input[type=text], textarea {
+    width: 100%; padding: 10px 12px; font-size: 14px; color: #ececf1;
+    background: #2a2a31; border: 1px solid #3d3d46; border-radius: 8px; outline: none;
+  }
+  textarea { min-height: 84px; resize: vertical; font-family: ui-monospace, monospace; font-size: 12.5px; }
+  input:focus, textarea:focus { border-color: #d97757; }
+  .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  button {
+    padding: 9px 16px; font-size: 14px; border: none; border-radius: 8px; cursor: pointer;
+    background: #d97757; color: #fff; font-weight: 600;
+  }
+  button.secondary { background: #3d3d46; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .url-box {
+    margin-top: 12px; padding: 10px 12px; background: #2a2a31; border: 1px solid #3d3d46;
+    border-radius: 8px; font-family: ui-monospace, monospace; font-size: 12px;
+    word-break: break-all; display: none; color: #9ad1a8;
+  }
+  .msg { margin-top: 12px; font-size: 13.5px; line-height: 1.6; display: none; padding: 10px 12px; border-radius: 8px; }
+  .ok  { background: #14361f; color: #7dd89d; display: none; }
+  .err { background: #3d1a1a; color: #f08c8c; display: none; }
+  a { color: #7ab8ff; }
+  .hint { font-size: 12.5px; color: #83838d; line-height: 1.7; margin-top: 8px; }
+  ol { margin: 6px 0 0; padding-left: 18px; color: #a3a3ad; font-size: 13px; line-height: 1.9; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Clewdr · OAuth 授权助手</h1>
+  <p class="sub">
+    Claude 的 OAuth 授权现在要求真实浏览器里的 hCaptcha 人机验证，服务器无法自动完成这一步。
+    通过本页面，用<b>你自己已登录 Claude 的浏览器</b>完成一次授权，之后 Clewdr 会自动续期，无需再次操作。
+  </p>
+
+  <div class="step">
+    <h2>① 生成授权链接</h2>
+    <label>管理密码（Web Admin Password，同 clewdr.toml 的 admin_password）</label>
+    <input type="password" id="key" placeholder="admin password">
+    <div class="row">
+      <button id="gen">生成授权链接</button>
+      <span class="hint">链接 15 分钟内有效</span>
+    </div>
+    <div class="url-box" id="urlbox"></div>
+    <div class="msg err" id="generr"></div>
+  </div>
+
+  <div class="step">
+    <h2>② 在浏览器完成授权并复制 code</h2>
+    <ol>
+      <li>点击上方生成的链接（需已登录 <a href="https://claude.ai" target="_blank">claude.ai</a>）</li>
+      <li>在授权页点击 <b>Authorize</b></li>
+      <li>页面会跳转并<b>显示一串授权码</b>（或地址栏里带 <code>?code=...</code> 的 URL），完整复制</li>
+    </ol>
+    <label>粘贴授权码或完整的回调 URL</label>
+    <textarea id="code" placeholder="粘贴 code 或整个 URL，例如 https://platform.claude.com/oauth/code/callback?code=..."></textarea>
+    <div class="row">
+      <button id="done">完成授权</button>
+      <button class="secondary" id="test">测试 /code/v1</button>
+    </div>
+    <div class="msg ok" id="okmsg"></div>
+    <div class="msg err" id="errmsg"></div>
+  </div>
+
+  <p class="hint">
+    授权成功后，token 会保存在对应 cookie 上并自动刷新。如果以后 token 失效（例如修改密码、撤销授权），
+    回到本页面重复上述两步即可。API 调用地址不变：/code/v1/messages，密钥为配置里的 password。
+  </p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const lsKey = 'clewdr_admin_key';
+$('key').value = localStorage.getItem(lsKey) || '';
+
+async function call(path, opts) {
+  const key = $('key').value.trim();
+  localStorage.setItem(lsKey, key);
+  const res = await fetch(path, Object.assign({
+    headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+  }, opts));
+  let body = {};
+  try { body = await res.json(); } catch {}
+  if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
+  return body;
+}
+
+function show(el, text) { el.textContent = text; el.style.display = 'block'; }
+function hideAll() { ['generr','okmsg','errmsg'].forEach(i => { $(i).style.display = 'none'; }); }
+
+$('gen').onclick = async () => {
+  hideAll();
+  $('gen').disabled = true; $('gen').textContent = '生成中…（需要访问上游，约几秒）';
+  try {
+    const r = await call('/api/oauth/authorize_url', { method: 'GET' });
+    const box = $('urlbox');
+    box.style.display = 'block';
+    box.innerHTML = '';
+    const a = document.createElement('a');
+    a.href = r.url; a.textContent = r.url; a.target = '_blank';
+    box.appendChild(a);
+  } catch (e) { show($('generr'), '失败：' + e.message); }
+  $('gen').disabled = false; $('gen').textContent = '生成授权链接';
+};
+
+$('done').onclick = async () => {
+  hideAll();
+  const code = $('code').value.trim();
+  if (!code) { show($('errmsg'), '请先粘贴授权码'); return; }
+  $('done').disabled = true; $('done').textContent = '提交中…';
+  try {
+    const r = await call('/api/oauth/complete', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+    let when = '';
+    if (r.expires_at) when = '，token 有效期至 ' + new Date(r.expires_at * 1000).toLocaleString();
+    show($('okmsg'), '授权成功！/code/v1 已可用' + when + '，之后会自动续期。');
+    $('code').value = '';
+  } catch (e) { show($('errmsg'), '失败：' + e.message + '（若提示 state 过期请重新生成链接）'); }
+  $('done').disabled = false; $('done').textContent = '完成授权';
+};
+
+$('test').onclick = async () => {
+  hideAll();
+  try {
+    const key = $('key').value.trim();
+    const res = await fetch('/code/v1/models', { headers: { 'Authorization': 'Bearer ' + key } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    await res.json();
+    show($('okmsg'), '/code/v1 接口可达且认证通过。发送一条真实消息即可确认端到端可用。');
+  } catch (e) { show($('errmsg'), '测试失败：' + e.message); }
+};
+</script>
+</body>
+</html>

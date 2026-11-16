@@ -44,8 +44,11 @@ impl Pkce {
     ///
     /// Split from [`Self::new_random`] so the derivation can be checked
     /// against RFC 7636's published verifier and challenge pair, which is
-    /// only possible if the verifier can be supplied.
-    fn from_verifier(verifier: String) -> Self {
+    /// only possible if the verifier can be supplied. Also the constructor
+    /// for redeeming a browser-assisted authorization, where the verifier
+    /// was generated when the authorize URL was built and only the code
+    /// exchange half runs here.
+    pub(super) fn from_verifier(verifier: String) -> Self {
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
         Self {
             verifier,

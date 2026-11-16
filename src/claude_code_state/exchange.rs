@@ -46,6 +46,54 @@ enum TokenOutcome {
 }
 
 impl ClaudeCodeState {
+    /// Build the authorize URL for browser-assisted authorization.
+    ///
+    /// The authorize endpoint demands an hCaptcha client attestation that
+    /// only a real browser can mint, so the operator opens this URL in their
+    /// own logged-in browser and approves there. The browser lands on
+    /// [`CC_REDIRECT_URI`], which displays the code to copy back.
+    ///
+    /// Returns the URL plus the PKCE verifier and state that
+    /// [`Self::redeem_authorization_code`] needs to trade the code for a
+    /// token. The caller must keep the verifier server-side; the state is
+    /// echoed back by the redirect to tie the two halves together.
+    ///
+    /// # Panics
+    /// If the hardcoded `claude.ai` authorize URL fails to parse, which
+    /// would mean the URL scheme itself changed.
+    #[must_use]
+    pub fn browser_authorize_url(org_uuid: &str) -> (url::Url, String, String) {
+        let pkce = Pkce::new_random();
+        let state = random_state();
+        let cc_client_id = CLEWDR_CONFIG.load().cc_client_id();
+        let mut params = authorize_params(&cc_client_id, CC_REDIRECT_URI, SCOPES, &pkce, &state);
+        params.insert("orgUUID".to_string(), org_uuid.to_string());
+        let mut url = Url::parse("https://claude.ai/oauth/authorize").expect("static URL parses");
+        url.query_pairs_mut().extend_pairs(params.iter());
+        (url, pkce.verifier().to_owned(), state)
+    }
+
+    /// Trade a code captured from a browser-assisted authorization for a
+    /// token, storing it on the cookie and returning the cookie to the pool.
+    ///
+    /// # Errors
+    /// Upstream HTTP failures, or a token response that cannot be parsed.
+    pub async fn redeem_authorization_code(
+        &mut self,
+        code: String,
+        state: Option<String>,
+        verifier: String,
+        org_uuid: String,
+    ) -> Result<(), ClewdrError> {
+        let code_res = ExchangeResult {
+            code,
+            state,
+            pkce: Pkce::from_verifier(verifier),
+            org_uuid,
+        };
+        self.exchange_token(code_res).await
+    }
+
     /// Run the OAuth authorization step and return the code to exchange.
     ///
     /// # Errors
